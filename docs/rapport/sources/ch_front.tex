@@ -1,0 +1,38 @@
+\chapter*{Remerciements}
+\addcontentsline{toc}{chapter}{Remerciements}
+\thispagestyle{plain}
+
+Nous tenons à exprimer notre sincère gratitude à notre encadrant, \textbf{Pr.~Fikal}, pour son enseignement du cours de \emph{Deep Learning} et pour l’encadrement de ce projet, qui nous a permis de mettre en pratique, de bout en bout, les notions étudiées~: réseaux convolutifs, transfert d’apprentissage, évaluation et déploiement d’un modèle.
+
+Nous remercions également l’\textbf{École Mohammadia d’Ingénieurs} et le \textbf{Département Modélisation et Informatique Scientifique} pour le cadre de travail et les ressources mis à notre disposition.
+
+Nos remerciements vont aussi aux auteurs des jeux de données publics utilisés dans ce projet, ainsi qu’aux plateformes Kaggle et Android Studio, dont les outils gratuits ont rendu possibles l’entraînement du modèle et le développement de l’application.
+
+Enfin, nous remercions nos proches et nos camarades pour leurs encouragements tout au long de ce travail.
+
+\clearpage
+
+\chapter*{Résumé}
+\addcontentsline{toc}{chapter}{Résumé}
+\thispagestyle{plain}
+
+\begin{absbox}
+Ce rapport présente la conception, l’entraînement et le déploiement d’un système qui reconnaît le \emph{stade de maturité} de trois fruits (bananes, fraises, avocats) à partir d’une simple photographie, directement sur un smartphone Android, sans connexion Internet.
+\end{absbox}
+
+Le problème est posé comme une classification d’images en \textbf{11 classes} (par exemple «~fraise mûre~», «~avocat pourri~» ou «~banane trop mûre~»). Les données proviennent de deux jeux publics~: 1\,431 photographies annotées par des boîtes englobantes, dont nous avons extrait 1\,598 images de fruits recadrés. Le découpage entraînement/validation/test (70/15/15) est réalisé \emph{par photo d’origine} afin d’éviter toute fuite d’information.
+
+Le modèle repose sur le \textbf{transfert d’apprentissage} avec \textbf{MobileNetV2}, un réseau convolutif conçu pour les appareils mobiles. L’entraînement se déroule en deux phases~: apprentissage de la nouvelle couche de décision avec la base gelée, puis ajustement fin (\emph{fine-tuning}) des dernières couches avec un taux d’apprentissage très faible. Le modèle retenu atteint une exactitude de \textbf{93,1\,\%} (215 images correctes sur 231) sur un jeu de test jamais utilisé pendant l’entraînement, avec un F1-score moyen de 0,90. Aucune erreur ne confond deux fruits différents : les confusions se produisent entre stades voisins d’un même fruit, ce qui reflète le caractère graduel de la maturité.
+
+Le modèle est converti au format \textbf{TensorFlow Lite} avec quantification~: il passe de 23,1\,Mo à 2,5\,Mo (environ neuf fois plus léger) pour une perte d’exactitude inférieure à un demi-point et 99,6\,\% de prédictions identiques. Une application Android en Kotlin l’exécute localement, affiche les trois meilleures hypothèses avec leur probabilité, applique un seuil de confiance de 70\,\% (« Incertain » en dessous) et fournit un conseil adapté à chaque stade.
+
+Des expériences complémentaires montrent que la qualité et la cohérence des étiquettes pèsent davantage que la quantité de données~: l’ajout de 624 images de bananes issues d’un autre jeu de données, dont la définition de «~trop mûre~» diffère, dégrade les résultats. Le rapport discute enfin les limites (jeu de test réduit, décalage entre photos de laboratoire et photos réelles) et les perspectives (photos prises au smartphone, validation croisée, détection multi-fruits).
+
+\vspace{4pt}
+\noindent\textbf{Mots-clés~:} deep learning~; réseaux de neurones convolutifs~; MobileNetV2~; transfert d’apprentissage~; classification de maturité~; TensorFlow Lite~; quantification~; application Android.
+
+\vspace{10pt}
+\begin{absbox}
+\textbf{Abstract.} This report describes a complete pipeline for classifying the ripeness stage of bananas, strawberries and avocados from a single photo, running fully offline on an Android phone. A MobileNetV2 network pre-trained on ImageNet is fine-tuned on 1\,598 cropped fruit images (11 classes), reaching 93.1\,\% accuracy on a held-out test set of 231 images. The model is quantized with TensorFlow Lite (23.1\,MB to 2.5\,MB, 99.6\,\% identical predictions) and embedded in an Android application that reports the top-3 predictions and returns ``uncertain'' below a 70\,\% confidence threshold. Additional experiments show that label consistency matters more than data volume.
+\end{absbox}
+\clearpage

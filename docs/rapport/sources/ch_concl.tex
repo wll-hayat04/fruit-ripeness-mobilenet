@@ -1,0 +1,17 @@
+\chapter*{Conclusion générale}
+\addcontentsline{toc}{chapter}{Conclusion générale}
+\thispagestyle{plain}
+
+Ce projet avait pour but de concevoir un système capable de reconnaître, sur un smartphone et sans connexion, le fruit et son stade de maturité à partir d’une simple photographie. Nous y sommes parvenus de bout en bout~: de la préparation des données au déploiement dans une application Android fonctionnelle.
+
+Sur le plan théorique, nous avons rappelé les bases du deep learning, détaillé le fonctionnement des réseaux convolutifs (convolution, pooling, normalisation par lots) et expliqué ce qui fait la légèreté de MobileNet~: la convolution séparable en profondeur, qui réduit le coût d’un facteur proche de neuf, et le bloc résiduel inversé à goulot linéaire de MobileNetV2.
+
+Sur le plan expérimental, un modèle MobileNetV2 affiné en deux phases atteint \textbf{93,1\,\%} d’exactitude sur un jeu de test de 231 images (intervalle de confiance à 95\,\% : 89,0 à 95,7\,\%), avec un F1 macro de 0,90. Il identifie toujours correctement le fruit ; ses erreurs se situent entre stades voisins. La quantification dynamique ramène le modèle de 23,1 à \textbf{2,5\,Mo} pour une perte d’une seule image sur 231, avec un temps d’inférence de l’ordre de 20\,ms sur CPU.
+
+Sur le plan applicatif, l’application Android exécute le modèle localement, corrige l’orientation des photos, moyenne les prédictions sur l’image et son miroir, et surtout \emph{s’abstient de répondre} quand elle n’est pas sûre~: un seuil de confiance de 70\,\% déclenche les mentions « Incertain » ou « entre deux stades ». Chaque résultat s’accompagne d’un conseil pratique.
+
+Le projet nous a aussi enseigné plusieurs leçons méthodologiques. Découper les données par photo d’origine évite une évaluation trop optimiste~; réutiliser sans précaution des objets de rappel (\emph{callbacks}) entre deux phases d’entraînement peut dégrader silencieusement les résultats~; geler les couches de normalisation en fine-tuning est déterminant~; enfin, ajouter des données d’une autre source n’aide que si les étiquettes suivent la même convention, comme le montre notre expérience sur les bananes.
+
+Les limites sont claires~: un jeu de test de taille modeste, des étiquettes de maturité subjectives, un seul fruit par image, aucune détection des objets qui ne sont pas des fruits et des tests limités à un émulateur. Les perspectives les plus directes sont l’enrichissement des données avec une convention d’étiquetage unique, l’étalonnage des probabilités, un détecteur de fruits en amont du classifieur et une mesure sur plusieurs téléphones réels.
+
+Au-delà de ce cas particulier, ce travail illustre une idée simple~: grâce au transfert d’apprentissage et à la quantification, un réseau profond utile peut aujourd’hui tenir dans quelques mégaoctets et s’exécuter dans la poche de l’utilisateur, sans que ses photos ne quittent son téléphone.

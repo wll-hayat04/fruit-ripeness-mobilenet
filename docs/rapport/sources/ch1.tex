@@ -1,0 +1,84 @@
+\chapter{Contexte, objectifs et démarche}\label{chap:contexte}
+
+\section{Contexte et motivation}
+
+Le gaspillage alimentaire est en grande partie un problème de jugement~: un fruit écarté trop tôt ou jeté trop tard représente une perte évitable. Un outil capable d’évaluer la maturité d’un fruit à partir d’une photo apporterait une aide concrète à plusieurs publics~: le consommateur qui hésite devant un avocat, le commerçant qui trie ses étals, ou le producteur qui décide du moment de la récolte.
+
+Sur le plan technique, ce sujet est un bon terrain d’étude du deep learning. Il s’agit d’un problème de classification d’images dont l’indice principal, la couleur, est visuel mais graduel, et dont les classes se recouvrent~: la frontière entre «~mûr~» et «~trop mûr~» n’est jamais nette. Il impose en outre une contrainte forte de déploiement~: le modèle doit tenir sur un téléphone.
+
+\section{Problématique et objectifs}
+
+L’objectif général est de réaliser un système complet de reconnaissance de la maturité de fruits sur smartphone. Il se décline en objectifs précis~:
+
+\begin{enumerate}
+  \item \textbf{Comprendre} les notions théoriques utilisées~: neurone, réseau convolutif, convolution séparable, transfert d’apprentissage~;
+  \item \textbf{Préparer} un jeu de données propre, avec un découpage sans fuite d’information~;
+  \item \textbf{Entraîner} un modèle MobileNetV2 par transfert d’apprentissage et l’évaluer rigoureusement~;
+  \item \textbf{Convertir} le modèle en TensorFlow Lite et mesurer l’effet de la quantification~;
+  \item \textbf{Développer} une application Android qui l’exécute localement et présente le résultat de façon utile~;
+  \item \textbf{Analyser} les limites du système et proposer des pistes d’amélioration.
+\end{enumerate}
+
+\section{Cahier des charges}
+
+Le tableau~\ref{tab:cahier} résume les exigences fixées au départ et la façon dont le projet y répond.
+
+\begin{table}[H]
+\centering
+\caption{Exigences du projet et réponses apportées.}\label{tab:cahier}
+\small
+\begin{tabularx}{\textwidth}{@{}p{3.0cm}X X@{}}
+\toprule
+\textbf{Exigence} & \textbf{Critère visé} & \textbf{Réponse du projet} \\
+\midrule
+Précision & Exactitude élevée sur un test indépendant & 93,1\,\% sur 231 images \\
+Légèreté & Modèle de quelques Mo & 2,5\,Mo après quantification \\
+Rapidité & Résultat quasi instantané & $\approx 20$\,ms par image sur CPU \\
+Confidentialité & Aucune photo envoyée à un serveur & Exécution 100\,\% locale \\
+Fiabilité & Éviter les réponses fausses assurées & Seuil de confiance de 70\,\% \\
+Utilité & Résultat exploitable par l’utilisateur & Conseil par stade de maturité \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Démarche et organisation du travail}
+
+Le travail suit la chaîne représentée sur la figure~\ref{fig:pipeline}. Chaque étape produit un livrable qui alimente la suivante~: le jeu de données alimente l’entraînement, le modèle entraîné est converti, et le fichier converti est embarqué dans l’application.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=3mm]
+  \node[blk,minimum width=24mm,minimum height=15mm] (a) {\textbf{1. Données}\\[-1pt]\footnotesize 2 jeux publics,\\11 classes};
+  \node[blk,minimum width=24mm,minimum height=15mm,right=of a] (b) {\textbf{2. Entraînement}\\[-1pt]\footnotesize Kaggle (GPU),\\MobileNetV2};
+  \node[blk,minimum width=24mm,minimum height=15mm,right=of b] (c) {\textbf{3. Évaluation}\\[-1pt]\footnotesize test indépendant,\\matrice de confusion};
+  \node[blk,minimum width=24mm,minimum height=15mm,right=of c] (d) {\textbf{4. Conversion}\\[-1pt]\footnotesize TensorFlow Lite,\\quantification};
+  \node[blkg,minimum width=24mm,minimum height=15mm,right=of d] (e) {\textbf{5. Application}\\[-1pt]\footnotesize Android,\\hors ligne};
+  \foreach \x/\y in {a/b,b/c,c/d,d/e} \draw[arr] (\x) -- (\y);
+\end{tikzpicture}
+\caption{Chaîne complète du projet, des données brutes à l’application Android.}\label{fig:pipeline}
+\end{figure}
+
+L’entraînement et l’évaluation ont été réalisés dans un carnet Jupyter sur la plateforme Kaggle, qui fournit gratuitement un GPU. Une fois le modèle converti, plus rien ne dépend de Kaggle~: le fichier \code{fruit\_ripeness.tflite} est simplement copié dans le dossier des ressources de l’application.
+
+\section{Environnement technique}
+
+\begin{table}[H]
+\centering
+\caption{Outils et bibliothèques utilisés.}\label{tab:outils}
+\small
+\begin{tabular}{@{}p{4.2cm}p{9.6cm}@{}}
+\toprule
+\textbf{Outil} & \textbf{Rôle} \\
+\midrule
+Kaggle Notebooks & Entraînement sur GPU (2 $\times$ NVIDIA T4), hébergement des jeux de données \\
+TensorFlow / Keras & Définition, entraînement et évaluation du modèle~; MobileNetV2 pré-entraîné \\
+scikit-learn & Découpage stratifié, poids de classes, rapport de classification \\
+Pillow, NumPy, Matplotlib & Recadrage des images, calculs, figures \\
+TensorFlow Lite & Conversion, quantification et exécution du modèle sur mobile \\
+Android Studio, Kotlin & Développement de l’application (activité unique, composants Material 3) \\
+Émulateur Pixel (API 37) & Tests de l’application \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Pourquoi Android Studio et Kotlin~?} Nous avons retenu le développement natif Android pour deux raisons. D’une part, l’exécution du modèle se fait avec l’interpréteur TensorFlow Lite directement depuis Kotlin, sans couche intermédiaire, ce qui simplifie l’accès à l’appareil photo et la mesure des temps d’inférence. D’autre part, Android Studio fournit un émulateur intégré qui permet de tester l’application sans téléphone physique. Des cadres multiplateformes comme Flutter auraient permis de viser aussi iOS, mais au prix d’une chaîne plus complexe pour un projet dont l’objectif principal est le modèle.

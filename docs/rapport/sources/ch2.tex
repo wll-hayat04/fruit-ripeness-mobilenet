@@ -1,0 +1,122 @@
+\chapter{Fondements du deep learning}\label{chap:dl}
+
+Ce chapitre rappelle les notions de base nécessaires pour comprendre la suite~: le neurone artificiel, l’apprentissage par descente de gradient, la classification multiclasse et la lutte contre le surapprentissage. Les définitions suivent les ouvrages de référence~\cite{goodfellow2016}.
+
+\section{Intelligence artificielle, apprentissage automatique et deep learning}
+
+L’\textbf{intelligence artificielle} (IA) désigne l’ensemble des techniques qui permettent à une machine de réaliser des tâches demandant habituellement de l’intelligence humaine. L’\textbf{apprentissage automatique} (\emph{machine learning}) en est une branche~: au lieu de programmer des règles à la main, on fournit des exemples et la machine en déduit elle-même une règle. Le \textbf{deep learning} est une branche de l’apprentissage automatique fondée sur des réseaux de neurones comportant de nombreuses couches successives.
+
+Dans notre projet, personne n’écrit de règle du type «~si la peau est jaune avec des taches brunes alors la banane est trop mûre~». Le réseau reçoit des milliers de photographies étiquetées et apprend seul quels indices visuels distinguent les stades de maturité. On parle d’\textbf{apprentissage supervisé}~: chaque image d’entraînement est accompagnée de sa classe correcte (l’\emph{étiquette}). La tâche est une \textbf{classification multiclasse}~: parmi $K=11$ classes possibles, le modèle doit désigner la bonne.
+
+\section{Le neurone artificiel}
+
+Le neurone artificiel est l’unité de calcul de base. Il reçoit plusieurs valeurs d’entrée $x_1,\dots,x_n$, calcule leur somme pondérée augmentée d’un biais, puis applique une fonction d’activation non linéaire $f$ :
+\begin{equation}
+  y = f\!\left(\sum_{i=1}^{n} w_i x_i + b\right) = f(\mathbf{w}^{\top}\mathbf{x} + b).
+\end{equation}
+Les \textbf{poids} $w_i$ et le \textbf{biais} $b$ sont les paramètres que le réseau apprend. La figure~\ref{fig:neurone} représente cette opération.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1mm,y=1mm]
+  \foreach \i/\yy in {1/18,2/0,3/-18}{
+    \node[blkw,minimum width=20mm] (x\i) at (0,\yy) {$x_\i$};
+    \node[font=\small,navy] at (24,\yy+5) {$w_\i$};
+  }
+  \node[circle,draw=navy,fill=navy,text=white,minimum size=17mm,font=\large] (s) at (52,0) {$\Sigma + b$};
+  \node[blko,minimum width=18mm,minimum height=12mm] (f) at (84,0) {$f(\cdot)$};
+  \node[blkg,minimum width=14mm,minimum height=12mm] (y) at (112,0) {$y$};
+  \foreach \i in {1,2,3} \draw[arr] (x\i.east) -- (s);
+  \draw[arr] (s) -- (f); \draw[arr] (f) -- (y);
+  \node[font=\footnotesize,softgray,align=center] at (0,-31) {entrées};
+  \node[font=\footnotesize,softgray,align=center] at (52,-17) {somme pondérée\\+ biais};
+  \node[font=\footnotesize,softgray,align=center] at (84,-12) {activation};
+  \node[font=\footnotesize,softgray,align=center] at (112,-12) {sortie};
+\end{tikzpicture}
+\caption{Un neurone artificiel~: somme pondérée des entrées, ajout d’un biais, puis fonction d’activation.}\label{fig:neurone}
+\end{figure}
+
+Un \textbf{réseau de neurones} organise ces neurones en \textbf{couches}~: chaque couche transforme la sortie de la précédente. Une couche \emph{dense} (ou entièrement connectée) relie chacun de ses neurones à toutes les sorties de la couche précédente. Avec $n$ entrées et $m$ neurones, elle contient $n\,m + m$ paramètres. Un réseau «~profond~» empile de nombreuses couches, chacune construisant des représentations plus abstraites que la précédente.
+
+\section{Fonctions d’activation}
+
+Sans fonction d’activation, empiler des couches revient à composer des applications linéaires, ce qui équivaut à une seule application linéaire~: la profondeur n’apporterait rien. La non-linéarité de $f$ permet au réseau de représenter des fonctions complexes. Le tableau~\ref{tab:activations} présente les fonctions utilisées dans ce rapport.
+
+\begin{table}[H]
+\centering
+\caption{Principales fonctions d’activation.}\label{tab:activations}
+\small
+\begin{tabular}{@{}llp{6.2cm}@{}}
+\toprule
+\textbf{Fonction} & \textbf{Définition} & \textbf{Usage} \\
+\midrule
+ReLU & $\max(0,x)$ & Couches cachées des CNN~: simple et rapide \\
+ReLU6 & $\min(\max(0,x),6)$ & MobileNet~: robuste en basse précision \\
+Sigmoïde & $\sigma(x)=\dfrac{1}{1+e^{-x}}$ & Classification binaire \\
+Softmax & $\dfrac{e^{z_k}}{\sum_j e^{z_j}}$ & Dernière couche d’un classifieur multiclasse \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=0.78\textwidth,height=5.4cm,xmin=-4,xmax=8,ymin=-0.5,ymax=7,
+  axis lines=middle,xlabel={$x$},ylabel={$f(x)$},xlabel style={at={(ticklabel* cs:1)},anchor=north west},
+  ylabel style={at={(ticklabel* cs:1)},anchor=south west},legend style={at={(0.01,0.97)},anchor=north west,font=\footnotesize,draw=none,fill=none},
+  grid=both,grid style={gray!15},tick label style={font=\footnotesize},samples=200]
+  \addplot[navy,very thick,domain=-4:7]{max(0,x)};\addlegendentry{ReLU}
+  \addplot[warnorange,very thick,dashed,domain=-4:8]{min(max(0,x),6)};\addlegendentry{ReLU6}
+  \addplot[okgreen,thick,domain=-4:8]{6/(1+exp(-x))};\addlegendentry{Sigmoïde $\times 6$}
+\end{axis}
+\end{tikzpicture}
+\caption{ReLU, ReLU6 et sigmoïde (multipliée par 6 pour la lisibilité).}\label{fig:activations}
+\end{figure}
+
+\section{Classification multiclasse~: softmax et entropie croisée}
+
+Pour classer une image en $K$ classes, la dernière couche du réseau produit un vecteur de $K$ scores bruts $z_1,\dots,z_K$ (les \emph{logits}). La fonction \textbf{softmax} les transforme en probabilités~:
+\begin{equation}
+  p_k = \softmax(\mathbf{z})_k = \frac{e^{z_k}}{\sum_{j=1}^{K} e^{z_j}}, \qquad p_k>0,\quad \sum_{k=1}^{K} p_k = 1.
+\end{equation}
+Par exemple, avec trois classes et les scores $(4,\,2,\,1)$, on obtient $e^4\approx 54{,}6$, $e^2\approx 7{,}4$, $e^1\approx 2{,}7$, dont la somme vaut $64{,}7$ ; les probabilités sont donc environ $(84\,\%,\ 11\,\%,\ 4\,\%)$. La classe prédite est celle de probabilité maximale, et cette probabilité sert de \textbf{confiance} dans l’application Android (chapitre~\ref{chap:android}).
+
+La qualité des prédictions est mesurée pendant l’entraînement par la fonction de perte \textbf{entropie croisée catégorielle}. Si $y$ est la vraie classe, la perte d’une image vaut
+\begin{equation}
+  \mathcal{L} = -\log p_{y}.
+\end{equation}
+Elle est faible quand le modèle attribue une probabilité proche de 1 à la bonne classe, et tend vers l’infini quand il lui en attribue une proche de 0. Quand les classes sont déséquilibrées, on pondère chaque image par un poids $\omega_y$ propre à sa classe~: $\mathcal{L}=-\omega_y\log p_y$ (section~\ref{sec:poids}).
+
+\section{Apprentissage par descente de gradient}
+
+Entraîner un réseau consiste à trouver les paramètres $\theta$ (tous les poids et biais) qui minimisent la perte moyenne sur les données d’entraînement. La méthode standard est la \textbf{descente de gradient}~: à chaque itération, on calcule le gradient $\nabla_\theta\mathcal{L}$ de la perte par rapport aux paramètres, puis on déplace les paramètres dans la direction opposée~:
+\begin{equation}
+  \theta \leftarrow \theta - \eta\,\nabla_\theta \mathcal{L}.
+\end{equation}
+Le \textbf{taux d’apprentissage} $\eta$ fixe la taille du pas~: trop grand, l’apprentissage diverge~; trop petit, il stagne. Le gradient est calculé efficacement par l’algorithme de \textbf{rétropropagation}, qui applique la règle de dérivation des fonctions composées de la sortie vers l’entrée du réseau.
+
+En pratique, on ne calcule pas le gradient sur toutes les images à la fois, mais sur de petits \textbf{lots} (\emph{mini-batchs}), de 32 images dans notre projet. Un passage complet sur toutes les images d’entraînement s’appelle une \textbf{époque}. Nous utilisons l’optimiseur \textbf{Adam}~\cite{kingma2015}, qui adapte le pas de chaque paramètre à partir d’estimations des moyennes mobiles du gradient et de son carré~; il est peu sensible au choix de $\eta$ et converge rapidement.
+
+\begin{defbox}{À retenir}
+Un réseau apprend en répétant quatre étapes~: (1) \emph{prédire} sur un lot d’images~; (2) \emph{mesurer l’erreur} avec la fonction de perte~; (3) \emph{calculer le gradient} par rétropropagation~; (4) \emph{corriger} les poids avec l’optimiseur.
+\end{defbox}
+
+\section{Généralisation et surapprentissage}
+
+Le but n’est pas de bien classer les images d’entraînement, mais de bien classer des images \emph{jamais vues}. Un modèle qui apprend les exemples «~par cœur~» sans dégager de règle générale souffre de \textbf{surapprentissage} (\emph{overfitting})~: son erreur d’entraînement est faible mais son erreur sur de nouvelles données est élevée. Pour le détecter et le limiter, on découpe les données en trois ensembles disjoints~:
+
+\begin{itemize}
+  \item l’ensemble d’\textbf{entraînement}, qui sert à ajuster les poids~;
+  \item l’ensemble de \textbf{validation}, qui sert à surveiller la généralisation pendant l’entraînement et à choisir les hyperparamètres~;
+  \item l’ensemble de \textbf{test}, utilisé une seule fois à la fin pour mesurer les performances finales.
+\end{itemize}
+
+Plusieurs techniques de \textbf{régularisation} réduisent le surapprentissage~:
+
+\begin{itemize}
+  \item le \textbf{dropout}~\cite{srivastava2014}, qui désactive aléatoirement une fraction des neurones à chaque itération d’entraînement~;
+  \item l’\textbf{augmentation de données}, qui génère des variantes des images (rotations, zooms, retournements) pour que le modèle ne dépende pas d’une pose particulière~;
+  \item l’\textbf{arrêt anticipé} (\emph{early stopping}), qui interrompt l’entraînement quand la perte de validation cesse de diminuer~;
+  \item la \textbf{réduction du taux d’apprentissage sur plateau}, qui diminue $\eta$ quand la validation stagne~;
+  \item le \textbf{transfert d’apprentissage}, qui part d’un réseau déjà entraîné (section~\ref{sec:transfer}).
+\end{itemize}

@@ -1,0 +1,76 @@
+\chapter{Conversion TensorFlow Lite et quantification}\label{chap:tflite}
+
+Le modèle Keras produit à l’issue de l’entraînement occupe plus de 23\,Mo et dépend de la bibliothèque TensorFlow complète. Pour l’embarquer sur un téléphone, nous le convertissons au format \textbf{TensorFlow Lite} (TFLite), conçu pour les appareils mobiles, puis nous le \textbf{quantifions} pour réduire encore sa taille.
+
+\section{Le format TensorFlow Lite}
+
+Un fichier \code{.tflite} est un graphe de calcul sérialisé au format FlatBuffers~: il contient les opérations du réseau et les poids dans un seul fichier compact, qui peut être lu sans copie en mémoire. Il est exécuté par un \emph{interpréteur} très léger, disponible pour Android, iOS et les microcontrôleurs, qui sélectionne les opérations optimisées pour le processeur de l’appareil. Le modèle ne dépend plus ni de Python ni de Keras.
+
+\section{La quantification}
+
+Les poids d’un réseau sont stockés en nombres flottants sur 32 bits. La \textbf{quantification} les représente sur moins de bits, typiquement des entiers sur 8 bits~\cite{jacob2018}. Chaque valeur réelle $x$ est approchée par un entier $q\in[-128,127]$ à l’aide d’un facteur d’échelle $s$ et d’un décalage $z$ :
+\begin{equation}
+  x \approx s\,(q - z), \qquad q = \operatorname{round}\!\left(\frac{x}{s}\right)+z.
+\end{equation}
+Le facteur $s$ est calculé par tenseur (ou par canal), en fonction de l’étendue des valeurs à représenter. Passer de 32 à 8 bits divise l’espace occupé par quatre, au prix d’une petite erreur d’arrondi sur chaque poids.
+
+Nous utilisons la \textbf{quantification dynamique} (\emph{dynamic range quantization})~: seuls les \emph{poids} sont stockés en 8 bits~; les activations restent en flottant et sont quantifiées à la volée pendant l’inférence. C’est la variante la plus simple (option \code{DEFAULT} du convertisseur), qui ne demande aucune image de calibration.
+
+\section{Procédure de conversion}
+
+La conversion se fait en quelques lignes à partir du modèle Keras entraîné~:
+
+\begin{lstlisting}[language=PythonK]
+converter = tf.lite.TFLiteConverter.from_keras_model(model)
+converter.optimizations = [tf.lite.Optimize.DEFAULT]   # poids en 8 bits
+tflite_model = converter.convert()
+open("fruit_ripeness.tflite", "wb").write(tflite_model)
+\end{lstlisting}
+
+Comme le prétraitement est inclus dans le modèle (chapitre~\ref{chap:modele}), le fichier produit a l’interface suivante~:
+
+\begin{table}[H]
+\centering
+\caption{Interface du modèle TFLite.}\label{tab:io}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+ & \textbf{Forme} & \textbf{Contenu} \\
+\midrule
+Entrée & $[1,224,224,3]$, \code{float32} & Pixels RGB entre 0 et 255 \\
+Sortie & $[1,11]$, \code{float32} & Probabilités softmax des 11 classes \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+L’ordre des 11 sorties est l’ordre alphabétique des noms de classes, enregistré dans le fichier \code{labels.txt} livré avec l’application. Une inversion de cet ordre produirait des résultats absurdes mais sans message d’erreur~: le fichier d’étiquettes doit toujours être généré par le même carnet que le modèle.
+
+\section{Effets de la quantification}
+
+Nous avons comparé le modèle Keras (flottants 32 bits) et le modèle TFLite quantifié sur les mêmes 231 images de test.
+
+\begin{table}[H]
+\centering
+\caption{Comparaison du modèle Keras et du modèle TFLite quantifié.}\label{tab:quant}
+\small
+\begin{tabular}{@{}lrr@{}}
+\toprule
+ & \textbf{Keras (float32)} & \textbf{TFLite (poids 8 bits)} \\
+\midrule
+Taille du fichier & 23,1\,Mo & \textbf{2,5\,Mo} \\
+Exactitude de test & 93,07\,\% (215/231) & 92,64\,\% (214/231) \\
+Prédictions identiques & \multicolumn{2}{c}{99,6\,\% (230 images sur 231)} \\
+Temps d’inférence moyen (CPU Kaggle) & --- & 19,6\,ms par image \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+La taille est divisée par \textbf{9} environ, pour une perte d’une seule image correctement classée sur 231 (0,43 point), bien en dessous de l’incertitude de la mesure. Le modèle quantifié donne la même réponse que le modèle d’origine dans 230 cas sur 231. La quantification est donc quasi sans perte ici~; elle est essentielle pour un téléchargement rapide et un faible encombrement mémoire.
+
+\begin{defbox}{D’où vient la différence de taille~?}
+Les 2,27 millions de paramètres occupent environ 9\,Mo en 32 bits, contre environ 2,3\,Mo en 8 bits ($2{,}27\cdot10^6 \times 1\ \text{octet}$), ce qui explique l’essentiel des 2,5\,Mo du fichier TFLite. Le fichier Keras de 23,1\,Mo est plus volumineux que les seuls poids, car il enregistre aussi des variables utiles à l’entraînement (notamment l’état de l’optimiseur) et la description complète du modèle~; le fichier TFLite ne garde que ce qui sert à l’inférence.
+\end{defbox}
+
+\section{Temps d’inférence}
+
+Sur le CPU d’un carnet Kaggle, le modèle quantifié met en moyenne 19,6\,ms par image. Sur l’émulateur Android (processeur émulé, plus lent), les temps mesurés dans l’application sont de 46 à 380\,ms par photo, car chaque prédiction exécute le réseau \emph{deux fois} (image puis son miroir, section~\ref{sec:tta}). Ces valeurs restent très inférieures à la seconde. Sur un vrai téléphone, le temps devrait être comparable ou meilleur, mais nous ne l’avons pas mesuré faute d’appareil physique.

@@ -1,0 +1,179 @@
+\appendix
+
+\chapter{Code d’entraînement (extraits)}\label{app:code}
+
+Les extraits ci-dessous reprennent la structure du carnet d’entraînement. La construction du modèle est reconstituée à partir de la configuration enregistrée du modèle retenu (augmentation, dropout, tête de classification)~; les valeurs des phases d’entraînement sont celles décrites au chapitre~\ref{chap:modele}.
+
+\Needspace*{12\baselineskip}
+\section{Construction du modèle}
+
+\begin{lstlisting}[language=PythonK]
+IMG, N = (224, 224), 11
+
+augment = tf.keras.Sequential([
+    tf.keras.layers.RandomFlip("horizontal_and_vertical"),
+    tf.keras.layers.RandomRotation(0.15),
+    tf.keras.layers.RandomZoom(0.15),
+    tf.keras.layers.RandomBrightness(0.1),
+    tf.keras.layers.RandomContrast(0.1),
+], name="augmentation")      # pas de changement de teinte
+
+base = tf.keras.applications.MobileNetV2(
+    input_shape=IMG + (3,), include_top=False, weights="imagenet")
+base.trainable = False       # phase 1 : base gelee
+
+inputs = tf.keras.Input(shape=IMG + (3,))        # pixels 0-255
+x = augment(inputs)
+x = tf.keras.applications.mobilenet_v2.preprocess_input(x)   # [-1,1]
+x = base(x, training=False)
+x = tf.keras.layers.GlobalAveragePooling2D()(x)
+x = tf.keras.layers.Dropout(0.3)(x)
+outputs = tf.keras.layers.Dense(N, activation="softmax")(x)
+model = tf.keras.Model(inputs, outputs)
+\end{lstlisting}
+
+\Needspace*{12\baselineskip}
+\section{Poids de classes et phase 1}
+
+\begin{lstlisting}[language=PythonK]
+y_train = np.concatenate([y.numpy() for _, y in train_ds])
+weights = compute_class_weight("balanced",
+                               classes=np.arange(N), y=y_train)
+CLASS_WEIGHT = dict(enumerate(weights))
+
+cb1 = [tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=6,
+                                        restore_best_weights=True),
+       tf.keras.callbacks.ReduceLROnPlateau(monitor="val_loss",
+                                            factor=0.5, patience=3)]
+model.compile(optimizer=tf.keras.optimizers.Adam(1e-3),
+              loss="sparse_categorical_crossentropy",
+              metrics=["accuracy"])
+hist1 = model.fit(train_ds, validation_data=val_ds, epochs=25,
+                  class_weight=CLASS_WEIGHT, callbacks=cb1)
+\end{lstlisting}
+
+\Needspace*{12\baselineskip}
+\section{Phase 2~: fine-tuning}
+
+\begin{lstlisting}[language=PythonK]
+base.trainable = True
+FREEZE_UNTIL = len(base.layers) - 40          # 40 dernieres couches
+for i, layer in enumerate(base.layers):
+    layer.trainable = (i >= FREEZE_UNTIL) and not isinstance(
+        layer, tf.keras.layers.BatchNormalization)
+
+cb2 = [tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=10,
+                                        restore_best_weights=True),
+       tf.keras.callbacks.ReduceLROnPlateau(monitor="val_loss", factor=0.5,
+                                            patience=4, min_lr=1e-7)]
+model.compile(optimizer=tf.keras.optimizers.Adam(1e-5),
+              loss="sparse_categorical_crossentropy",
+              metrics=["accuracy"])
+hist2 = model.fit(train_ds, validation_data=val_ds, epochs=40,
+                  class_weight=CLASS_WEIGHT, callbacks=cb2)
+\end{lstlisting}
+
+Remarque~: les objets \code{cb1} et \code{cb2} sont créés séparément~; réutiliser les mêmes callbacks dans les deux phases conserverait en mémoire la meilleure perte de la phase 1 (section~\ref{sec:finetune}).
+
+\chapter{Code de l’application Android (extraits)}\label{app:kotlin}
+
+\Needspace*{12\baselineskip}
+\section{Inférence avec test-time augmentation}
+
+\begin{lstlisting}[language=Kotlin]
+/** Probabilités des 11 classes, moyennées sur l'image et son miroir. */
+private fun classify(bitmap: Bitmap): FloatArray {
+    val src = bitmap.copy(Bitmap.Config.ARGB_8888, false)
+    val flipped = Bitmap.createBitmap(
+        src, 0, 0, src.width, src.height,
+        Matrix().apply { preScale(-1f, 1f) }, true)
+    val a = runModel(Bitmap.createScaledBitmap(src, IMG_SIZE, IMG_SIZE, true))
+    val b = runModel(Bitmap.createScaledBitmap(flipped, IMG_SIZE, IMG_SIZE, true))
+    return FloatArray(a.size) { (a[it] + b[it]) / 2f }
+}
+
+private fun runModel(scaled: Bitmap): FloatArray {
+    // Pixels RGB float32 entre 0 et 255 (normalisation dans le modèle)
+    val input = ByteBuffer.allocateDirect(4 * IMG_SIZE * IMG_SIZE * 3)
+        .order(ByteOrder.nativeOrder())
+    val pixels = IntArray(IMG_SIZE * IMG_SIZE)
+    scaled.getPixels(pixels, 0, IMG_SIZE, 0, 0, IMG_SIZE, IMG_SIZE)
+    for (p in pixels) {
+        input.putFloat(((p shr 16) and 0xFF).toFloat())  // R
+        input.putFloat(((p shr 8) and 0xFF).toFloat())   // G
+        input.putFloat((p and 0xFF).toFloat())           // B
+    }
+    input.rewind()
+    val output = Array(1) { FloatArray(labels.size) }
+    interpreter.run(input, output)
+    return output[0]
+}
+\end{lstlisting}
+
+\Needspace*{12\baselineskip}
+\section{Décision~: fiable, entre deux stades ou incertain}
+
+\begin{lstlisting}[language=Kotlin]
+val top = probs.withIndex().sortedByDescending { it.value }.take(3)
+val best = labels[top[0].index]
+val conf = top[0].value
+val uncertain = conf < CONFIDENCE_MIN            // 0.70
+
+val second = labels[top[1].index]
+val sameFruit = best.substringBefore("_") == second.substringBefore("_")
+val between = uncertain && sameFruit && (conf + top[1].value) >= 0.85f
+
+if (between) {
+    // deux stades voisins du même fruit se partagent le résultat
+} else if (uncertain) {
+    // "Incertain" : meilleure hypothèse donnée à titre indicatif
+} else {
+    // résultat fiable : classe, confiance et conseil
+}
+\end{lstlisting}
+
+\chapter{Résultats détaillés}\label{app:resultats}
+
+\Needspace*{12\baselineskip}
+\section{Classes et ordre des sorties}
+
+L’ordre des 11 sorties du modèle (fichier \code{labels.txt}) est l’ordre alphabétique suivant~:
+
+\begin{enumerate}[nosep,leftmargin=*]
+  \item \code{avocat\_mur}
+  \item \code{avocat\_non\_mur}
+  \item \code{avocat\_partiellement\_mur}
+  \item \code{avocat\_pourri}
+  \item \code{banane\_mure}
+  \item \code{banane\_non\_mure}
+  \item \code{banane\_trop\_mure}
+  \item \code{fraise\_mure}
+  \item \code{fraise\_non\_mure}
+  \item \code{fraise\_partiellement\_mure}
+  \item \code{fraise\_pourrie}
+\end{enumerate}
+
+\Needspace*{12\baselineskip}
+\section{Rappel des chiffres clés}
+
+\begin{table}[H]
+\centering
+\caption{Chiffres clés du projet.}\label{tab:cles}
+\small
+\begin{tabular}{@{}lr@{}}
+\toprule
+\textbf{Grandeur} & \textbf{Valeur} \\
+\midrule
+Photographies d’origine & 1\,431 \\
+Images de fruits recadrées & 1\,598 \\
+Entraînement / validation / test & 1\,118 / 249 / 231 \\
+Paramètres du modèle & 2\,272\,075 \\
+Exactitude de test (Keras) & 93,07\,\% (215/231) \\
+Intervalle de Wilson à 95\,\% & [89,0\,\% ; 95,7\,\%] \\
+F1 macro & 0,897 \\
+Exactitude de test (TFLite quantifié) & 92,64\,\% (214/231) \\
+Taille Keras / TFLite & 23,1\,Mo / 2,5\,Mo \\
+Inférence CPU (Kaggle) & 19,6\,ms \\
+\bottomrule
+\end{tabular}
+\end{table}

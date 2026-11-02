@@ -1,0 +1,133 @@
+\chapter{Les réseaux de neurones convolutifs}\label{chap:cnn}
+
+Les réseaux convolutifs (\emph{Convolutional Neural Networks}, CNN) sont les réseaux de référence pour traiter des images. Ce chapitre explique pourquoi ils remplacent avantageusement les couches denses pour cet usage, puis détaille leurs composants~: convolution, pooling, normalisation et architecture d’ensemble.
+
+\section{Limites des réseaux entièrement connectés pour les images}
+
+Une image en couleur de $224\times224$ pixels contient $224\times224\times3=150\,528$ valeurs. Si l’on relie chacune de ces valeurs à une couche dense de seulement 1\,000 neurones, cette couche compte déjà $150\,528\times1\,000\approx150$ millions de poids. Un tel modèle est à la fois trop lourd pour un téléphone et très exposé au surapprentissage. De plus, il ignore la structure bidimensionnelle de l’image~: deux pixels voisins ne sont pas traités autrement que deux pixels éloignés, et un motif décalé de quelques pixels devient pour lui un motif entièrement différent.
+
+Les CNN résolvent ces deux problèmes grâce à deux idées~: la \textbf{connectivité locale} (chaque neurone ne regarde qu’une petite zone de l’image) et le \textbf{partage des poids} (le même petit filtre est appliqué à toutes les positions). Un filtre $3\times3$ sur trois canaux ne compte que $3\times3\times3=27$ poids, quelle que soit la taille de l’image.
+
+\section{L’opération de convolution}
+
+Une \textbf{convolution} fait glisser un petit filtre (ou \emph{noyau}) sur l’image. À chaque position, on multiplie les valeurs du filtre par les pixels qu’il recouvre, terme à terme, puis on additionne les produits. Le résultat de toutes les positions forme une \textbf{carte de caractéristiques} (\emph{feature map}). Pour une entrée $X$ et un filtre $K$ de taille $f\times f$ :
+\begin{equation}
+  Y_{i,j} = \sum_{u=0}^{f-1}\sum_{v=0}^{f-1} K_{u,v}\,X_{i+u,\,j+v} + b.
+\end{equation}
+La figure~\ref{fig:conv} détaille un exemple chiffré~: un filtre $3\times3$ glisse sur une image $5\times5$ et produit une carte $3\times3$.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1mm,y=1mm]
+  \matrix[matrix of nodes,nodes={cellS},column sep=-\pgflinewidth,row sep=-\pgflinewidth,anchor=west] (in) at (0,0) {
+    |[fill=warnorange!35]| 1 & |[fill=warnorange!35]| 1 & |[fill=warnorange!35]| 1 & 0 & 0 \\
+    |[fill=warnorange!35]| 0 & |[fill=warnorange!35]| 1 & |[fill=warnorange!35]| 1 & 1 & 0 \\
+    |[fill=warnorange!35]| 0 & |[fill=warnorange!35]| 0 & |[fill=warnorange!35]| 1 & 1 & 1 \\
+    0 & 0 & 1 & 1 & 0 \\
+    0 & 1 & 1 & 0 & 0 \\
+  };
+  \node[font=\Large\bfseries,navy] at (43,0) {$\ast$};
+  \matrix[matrix of nodes,nodes={cellS},column sep=-\pgflinewidth,row sep=-\pgflinewidth,anchor=west] (k) at (49,0) {
+    |[fill=okgreen!20]| 1 & |[fill=okgreen!20]| 0 & |[fill=okgreen!20]| 1 \\
+    |[fill=okgreen!20]| 0 & |[fill=okgreen!20]| 1 & |[fill=okgreen!20]| 0 \\
+    |[fill=okgreen!20]| 1 & |[fill=okgreen!20]| 0 & |[fill=okgreen!20]| 1 \\
+  };
+  \node[font=\Large\bfseries,navy] at (79,0) {$=$};
+  \matrix[matrix of nodes,nodes={cellS},column sep=-\pgflinewidth,row sep=-\pgflinewidth,anchor=west] (o) at (85,0) {
+    |[fill=warnorange!60]| 4 & 3 & 4 \\
+    2 & 4 & 3 \\
+    2 & 3 & 4 \\
+  };
+  \node[font=\footnotesize,softgray] at (17.5,-24) {Image $5\times5$};
+  \node[font=\footnotesize,softgray] at (60,-17) {Filtre $3\times3$};
+  \node[font=\footnotesize,softgray] at (95.5,-17) {Carte $3\times3$};
+\end{tikzpicture}
+\caption{Convolution d’une image $5\times5$ par un filtre $3\times3$. La zone orange de l’image, multipliée terme à terme par le filtre puis sommée, donne la valeur $1+0+1+0+1+0+0+0+1=4$ (case orange de la carte).}\label{fig:conv}
+\end{figure}
+
+\paragraph{Pas, remplissage et taille de sortie.} Le \textbf{pas} (\emph{stride}) $s$ est le décalage du filtre entre deux positions~; le \textbf{remplissage} (\emph{padding}) $p$ ajoute des zéros autour de l’image. Pour une entrée de taille $n$ et un filtre de taille $f$, la sortie a pour taille
+\begin{equation}
+  n_{\text{sortie}} = \left\lfloor \frac{n + 2p - f}{s} \right\rfloor + 1 .
+\end{equation}
+Un pas de 2 divise donc approximativement la largeur et la hauteur par deux~: c’est ainsi que MobileNetV2 réduit progressivement la taille des cartes (chapitre~\ref{chap:mobilenet}).
+
+\paragraph{Plusieurs canaux, plusieurs filtres.} Une image en couleur possède trois canaux (rouge, vert, bleu). Un filtre $f\times f$ s’étend alors sur tous les canaux d’entrée~: il contient $f\cdot f\cdot C_{\text{in}}$ poids, plus un biais. Une couche de convolution applique $N$ filtres différents et produit $N$ cartes de caractéristiques empilées. Son nombre de paramètres vaut
+\begin{equation}
+  (f\cdot f\cdot C_{\text{in}} + 1)\times N .
+\end{equation}
+Par exemple, la première convolution de MobileNetV2 ($f=3$, $C_{\text{in}}=3$, $N=32$) compte $(27+1)\times32=896$ paramètres seulement.
+
+\section{Activation et pooling}
+
+Après chaque convolution, on applique une fonction d’activation, presque toujours ReLU ou l’une de ses variantes (section précédente). L’opération de \textbf{pooling} réduit ensuite la taille des cartes en résumant chaque petite zone par une seule valeur. Le \emph{max pooling} $2\times2$ garde le maximum de chaque bloc de $2\times2$ (figure~\ref{fig:pool})~; le pooling moyen en garde la moyenne. Le pooling diminue le nombre de calculs et rend le réseau moins sensible aux petits décalages.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1mm,y=1mm]
+  \matrix[matrix of nodes,nodes={cellS},column sep=-\pgflinewidth,row sep=-\pgflinewidth,anchor=west] (a) at (0,0) {
+    1 & 3 & |[fill=boxfill]| 2 & |[fill=boxfill]| 1 \\
+    4 & |[fill=warnorange!45]| 6 & |[fill=boxfill]| 5 & |[fill=boxfill]| 2 \\
+    |[fill=boxfill]| 3 & |[fill=boxfill]| 2 & |[fill=okgreen!20]| 1 & |[fill=okgreen!20]| 0 \\
+    |[fill=boxfill]| 1 & |[fill=boxfill]| 2 & |[fill=okgreen!20]| 4 & |[fill=okgreen!20]| 8 \\
+  };
+  \draw[arr] (33,0) -- node[above,font=\footnotesize]{max $2\times2$} (52,0);
+  \matrix[matrix of nodes,nodes={cellS},column sep=-\pgflinewidth,row sep=-\pgflinewidth,anchor=west] (b) at (56,0) {
+    6 & 5 \\ 3 & 8 \\
+  };
+  \node[font=\footnotesize,softgray] at (14,-17) {Carte $4\times4$};
+  \node[font=\footnotesize,softgray] at (63,-10) {Carte $2\times2$};
+\end{tikzpicture}
+\caption{Max pooling $2\times2$ : chaque bloc de quatre valeurs est remplacé par son maximum.}\label{fig:pool}
+\end{figure}
+
+Une variante importante est le \textbf{pooling moyen global} (\emph{global average pooling})~: il remplace chaque carte de caractéristiques par la moyenne de toutes ses valeurs, ce qui transforme un tenseur $7\times7\times1280$ en un simple vecteur de 1\,280 nombres. C’est ce que fait MobileNetV2 avant sa couche de classification, et ce que nous exploitons pour y brancher notre propre tête de classification.
+
+\section{Normalisation par lots}
+
+La \textbf{normalisation par lots} (\emph{Batch Normalization}, BN)~\cite{ioffe2015} centre et met à l’échelle les activations d’une couche, canal par canal, à l’aide de la moyenne $\mu_B$ et de la variance $\sigma_B^2$ calculées sur le lot courant~:
+\begin{equation}
+  \hat{x} = \frac{x-\mu_B}{\sqrt{\sigma_B^2+\varepsilon}}, \qquad y = \gamma\,\hat{x} + \beta,
+\end{equation}
+où $\gamma$ et $\beta$ sont deux paramètres appris. La BN stabilise et accélère l’entraînement. En revanche, elle se comporte différemment à l’entraînement et à l’inférence (où elle utilise des moyennes mobiles). Ce point a une conséquence pratique pour notre projet~: lors du \emph{fine-tuning} d’un réseau pré-entraîné avec un petit jeu de données, il est préférable de \textbf{garder les couches BN gelées} pour ne pas déstabiliser leurs statistiques (section~\ref{sec:finetune}).
+
+\section{Architecture d’ensemble et hiérarchie de caractéristiques}
+
+Un CNN de classification enchaîne deux grandes parties (figure~\ref{fig:archi})~: une \textbf{base convolutive} qui extrait des caractéristiques, puis une \textbf{tête de classification} qui décide. La largeur et la hauteur des cartes diminuent au fil du réseau pendant que le nombre de canaux augmente~: pour MobileNetV2, on passe de $224\times224\times3$ à $7\times7\times1280$.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=4.5mm]
+  \node[blkw,minimum width=21mm,minimum height=16mm] (i) {\textbf{Image}\\[-1pt]{\footnotesize $224\times224\times3$}};
+  \node[blk,minimum width=25mm,minimum height=16mm,right=of i] (c) {\textbf{Convolutions}\\[-1pt]\footnotesize + ReLU\\(motifs)};
+  \node[blk,minimum width=22mm,minimum height=16mm,right=of c] (p) {\textbf{Pooling}\\[-1pt]{\footnotesize réduction}};
+  \node[blk,minimum width=22mm,minimum height=16mm,right=of p] (d) {\textbf{Dense}\\[-1pt]{\footnotesize combinaison}};
+  \node[blkg,minimum width=22mm,minimum height=16mm,right=of d] (s) {\textbf{Softmax}\\[-1pt]{\footnotesize 11 probabilités}};
+  \foreach \x/\y in {i/c,c/p,p/d,d/s} \draw[arr] (\x) -- (\y);
+  \draw[decorate,decoration={brace,amplitude=4pt,mirror},navy] ($(c.south west)+(0,-2mm)$) -- node[below=4pt,font=\footnotesize]{base convolutive (répétée)} ($(p.south east)+(0,-2mm)$);
+  \draw[decorate,decoration={brace,amplitude=4pt,mirror},navy] ($(d.south west)+(0,-2mm)$) -- node[below=4pt,font=\footnotesize]{tête} ($(s.south east)+(0,-2mm)$);
+\end{tikzpicture}
+\caption{Architecture générale d’un CNN de classification d’images.}\label{fig:archi}
+\end{figure}
+
+Les couches successives apprennent des caractéristiques de plus en plus abstraites~: les premières détectent des bords et des taches de couleur, les suivantes des textures (peau granuleuse d’une fraise, points bruns d’une banane), les plus profondes des parties d’objet (calice, queue, forme générale) et la dernière décide de la classe. C’est cette hiérarchie qui rend le transfert d’apprentissage possible~: les premières couches sont utiles pour presque toutes les images, quelle que soit la tâche finale.
+
+\section{De LeNet à MobileNet~: un siècle de progrès en vingt ans}
+
+Les CNN ont connu une progression rapide, résumée dans le tableau~\ref{tab:histoire}. LeNet-5~\cite{lecun1998} reconnaissait des chiffres manuscrits avec quelques dizaines de milliers de paramètres. AlexNet~\cite{krizhevsky2012} a remporté en 2012 le concours ImageNet et déclenché l’essor du deep learning, au prix de dizaines de millions de paramètres. VGG~\cite{simonyan2015} puis ResNet~\cite{he2016} ont augmenté la profondeur~; ResNet introduit les \emph{connexions résiduelles} qui facilitent l’entraînement de réseaux très profonds. Les architectures mobiles, dont MobileNet, ont ensuite cherché à conserver une bonne précision avec un nombre de paramètres divisé par dix ou plus.
+
+\begin{table}[H]
+\centering
+\caption{Quelques CNN marquants (ordres de grandeur du nombre de paramètres).}\label{tab:histoire}
+\small
+\begin{tabular}{@{}lcrp{6cm}@{}}
+\toprule
+\textbf{Réseau} & \textbf{Année} & \textbf{Paramètres} & \textbf{Apport principal} \\
+\midrule
+LeNet-5 & 1998 & $\approx 60$\,k & Premier CNN efficace (chiffres manuscrits) \\
+AlexNet & 2012 & $\approx 60$\,M & Succès sur ImageNet, ReLU, dropout, GPU \\
+VGG16 & 2014 & 138\,M & Profondeur par empilement de convolutions $3\times3$ \\
+ResNet-50 & 2015 & 25,6\,M & Connexions résiduelles \\
+MobileNetV2 & 2018 & 3,5\,M & Convolutions séparables, blocs résiduels inversés \\
+\bottomrule
+\end{tabular}
+\end{table}

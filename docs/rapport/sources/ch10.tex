@@ -1,0 +1,52 @@
+\chapter{Discussion, limites et perspectives}\label{chap:discussion}
+
+Ce chapitre prend du recul sur les résultats~: ce qu’ils démontrent, ce qu’ils ne démontrent pas, et ce qu’il faudrait faire pour aller plus loin.
+
+\section{Ce que montrent les résultats}
+
+Le transfert d’apprentissage avec MobileNetV2 permet d’atteindre une exactitude d’environ 93\,\% sur onze classes avec seulement 1\,118 images d’entraînement, en quelques minutes de calcul sur GPU. La quantification divise la taille du modèle par neuf sans perte significative, et le résultat tourne sur téléphone en quelques dizaines à quelques centaines de millisecondes. Le fruit est toujours correctement identifié ; les erreurs concernent des stades voisins, c’est-à-dire des cas où même des humains peuvent hésiter.
+
+Les expériences négatives sont aussi instructives que les réussites~: une augmentation plus agressive et l’ajout de données d’une autre source n’ont pas amélioré, et ont même dégradé, les performances. Ce n’est pas un échec du projet mais un résultat~: le facteur limitant n’est pas la capacité du modèle, c’est la quantité et la cohérence des données étiquetées.
+
+\section{Limites}
+
+\paragraph{Taille du jeu de test.} Avec 231 images, l’intervalle de confiance à 95\,\% de l’exactitude s’étend de 89,0 à 95,7\,\%. Les classes de fraises comptent 6 à 14 images de test : leurs scores individuels sont très bruités, et il serait imprudent de conclure à une supériorité réelle d’un fruit sur l’autre à partir d’un écart de quelques images.
+
+\paragraph{Subjectivité des étiquettes.} La maturité est un continuum découpé en classes par des annotateurs. La frontière entre «~partiellement mûr~» et «~mûr~» ou entre «~mûr~» et «~trop mûr~» dépend de l’opinion de la personne qui étiquette, comme le montre l’expérience 4. Un modèle ne peut pas être plus fiable que les étiquettes qui lui ont servi d’exemple.
+
+\paragraph{Représentativité des photos.} Les images viennent de deux jeux publics, avec des fonds, des éclairages et des appareils particuliers. Le cas (d) du chapitre~\ref{chap:android} montre qu’une photo prise dans un contexte différent peut déstabiliser le modèle. Les performances mesurées s’appliquent à des images comparables à celles du test, pas nécessairement à toute photo prise par un utilisateur.
+
+\paragraph{Un seul fruit par image.} Le modèle est un classifieur~: il décrit l’image entière. Une image contenant plusieurs fruits de stades différents, ou un fruit entouré de décor, sera mal traitée. Le recadrage par boîtes utilisé à l’entraînement n’existe pas à l’usage~: c’est à l’utilisateur de cadrer le fruit.
+
+\paragraph{Objets hors du domaine.} Le softmax attribue toujours des probabilités à 11 classes, même pour un objet qui n’est pas un fruit. Le seuil de confiance atténue le problème sans le résoudre~: un objet peut recevoir une forte probabilité sur une classe.
+
+\paragraph{Calibration des probabilités.} Le seuil de 70\,\% est fixé de façon empirique. Les probabilités d’un réseau profond sont souvent trop confiantes ; nous n’avons pas mesuré la calibration (par exemple avec la courbe de fiabilité).
+
+\paragraph{Tests de l’application.} L’application a été testée sur un émulateur et quelques photos. Les temps d’inférence réels sur des téléphones physiques, et le comportement sur des appareils variés (mémoire, orientation, caméras) restent à mesurer.
+
+\paragraph{Usage et responsabilité.} L’application donne des repères de consommation («~à consommer dans les 1 à 2 jours~»). Elle n’est pas un outil de sécurité alimentaire~: pour un fruit visiblement abîmé ou moisi, le conseil de prudence reste prioritaire, et la décision revient à l’utilisateur.
+
+\section{Perspectives}
+
+\begin{table}[H]
+\centering
+\caption{Pistes d’amélioration et bénéfice attendu.}\label{tab:persp}
+\small
+\begin{tabularx}{\textwidth}{@{}p{4.1cm}X@{}}
+\toprule
+\textbf{Piste} & \textbf{Bénéfice attendu} \\
+\midrule
+Données supplémentaires avec une convention d’étiquetage unique & Améliorer les classes rares (fraises, avocat mûr) sans l’incohérence observée à l’expérience 4 \\
+Validation croisée sur les photos d’origine & Réduire l’incertitude de la mesure malgré le petit effectif \\
+Classe «~autre~» ou détection de nouveauté & Refuser les objets qui ne sont pas des fruits \\
+Étalonnage des probabilités (\emph{temperature scaling}) & Rendre le seuil de confiance plus fiable \\
+Détecteur de fruits (YOLO) puis classifieur & Traiter plusieurs fruits par image, sans cadrage manuel \\
+Régression ordinale de la maturité & Respecter l’ordre des stades et pénaliser davantage les grandes erreurs \\
+Quantification entière complète, délégué GPU & Réduire la latence et la consommation sur téléphone \\
+Tests sur plusieurs téléphones physiques & Mesurer les temps réels et la robustesse de la capture \\
+Autres fruits et variétés & Élargir l’utilité de l’application \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+L’une des pistes les plus prometteuses est le \textbf{traitement ordinal} de la maturité. Les classes sont ordonnées (non mûr $<$ partiellement mûr $<$ mûr $<$ pourri), mais l’entropie croisée traite toutes les erreurs de la même manière~: confondre «~non mûr~» et «~pourri~» coûte autant que confondre deux stades voisins. Une perte ordinale, ou une régression d’un indice de maturité continu, reflèterait mieux la réalité du problème.

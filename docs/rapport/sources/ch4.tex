@@ -1,0 +1,155 @@
+\chapter{MobileNet et transfert d’apprentissage}\label{chap:mobilenet}
+
+Ce chapitre présente l’architecture retenue pour notre classifieur, MobileNetV2~\cite{sandler2018}, héritière de MobileNetV1~\cite{howard2017}, ainsi que la stratégie de transfert d’apprentissage qui permet de l’adapter à notre problème avec un petit jeu de données.
+
+\section{Pourquoi des architectures légères~?}
+
+Un smartphone dispose d’une mémoire limitée, d’un processeur beaucoup moins puissant qu’un serveur et d’une batterie à ménager. Un modèle destiné à y tourner doit donc respecter trois contraintes~: une \textbf{taille réduite} (quelques mégaoctets), un \textbf{nombre d’opérations faible} (pour répondre en quelques dizaines de millisecondes) et une \textbf{précision acceptable}. Les réseaux classiques comme VGG16 (138 millions de paramètres, environ 528\,Mo) sont inutilisables dans ce cadre. La famille MobileNet, proposée par Google, a été conçue spécifiquement pour ce compromis.
+
+\section{La convolution séparable en profondeur}
+
+L’idée centrale de MobileNet est de remplacer la convolution standard par une \textbf{convolution séparable en profondeur} (\emph{depthwise separable convolution}), qui sépare deux rôles que la convolution standard remplit simultanément~: traiter l’\emph{espace} (relations entre pixels voisins) et mélanger les \emph{canaux} (relations entre couleurs ou motifs).
+
+\begin{itemize}
+  \item La convolution \textbf{depthwise} applique \emph{un seul filtre $3\times3$ par canal d’entrée}, indépendamment des autres canaux. Elle traite l’espace mais ne mélange pas les canaux.
+  \item La convolution \textbf{pointwise} est une convolution $1\times1$ qui combine les canaux en chaque position. Elle mélange les canaux mais ne regarde pas les voisins.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=7mm]
+  \node[blkw,minimum width=24mm,minimum height=15mm] (in) {\textbf{Entrée}\\[-1pt]{\footnotesize $H\times W\times M$}};
+  \node[blk,minimum width=34mm,minimum height=15mm,right=of in] (dw) {\textbf{Depthwise $3\times3$}\\[-1pt]{\footnotesize 1 filtre par canal}};
+  \node[blk,minimum width=34mm,minimum height=15mm,right=of dw] (pw) {\textbf{Pointwise $1\times1$}\\[-1pt]{\footnotesize mélange des canaux}};
+  \node[blkg,minimum width=24mm,minimum height=15mm,right=of pw] (out) {\textbf{Sortie}\\[-1pt]{\footnotesize $H\times W\times N$}};
+  \foreach \x/\y in {in/dw,dw/pw,pw/out} \draw[arr] (\x) -- (\y);
+\end{tikzpicture}
+\caption{Convolution séparable en profondeur~: une convolution depthwise suivie d’une convolution pointwise.}\label{fig:dwsep}
+\end{figure}
+
+\paragraph{Gain de calcul.} Soient $D_K$ la taille du filtre, $M$ le nombre de canaux d’entrée, $N$ le nombre de canaux de sortie et $D_F\times D_F$ la taille de la carte de sortie. Le coût en multiplications est
+\begin{align}
+  \text{standard} &: D_K^2\cdot M\cdot N\cdot D_F^2, \\
+  \text{séparable} &: D_K^2\cdot M\cdot D_F^2 + M\cdot N\cdot D_F^2,
+\end{align}
+d’où un rapport
+\begin{equation}
+  \frac{\text{séparable}}{\text{standard}} = \frac{1}{N} + \frac{1}{D_K^2}.
+\end{equation}
+Avec des filtres $3\times3$ ($D_K^2=9$) et un grand nombre de canaux de sortie, la convolution séparable est donc \textbf{environ 8 à 9 fois moins coûteuse}. Le même rapport s’applique au nombre de poids.
+
+\begin{table}[H]
+\centering
+\caption{Exemple chiffré~: passer de $M=32$ à $N=64$ canaux avec des filtres $3\times3$.}\label{tab:sep}
+\small
+\begin{tabular}{@{}lrr@{}}
+\toprule
+ & \textbf{Poids} & \textbf{Multiplications sur une carte $56\times56$} \\
+\midrule
+Convolution standard & $3\cdot3\cdot32\cdot64 = 18\,432$ & $\approx 57{,}8$ millions \\
+Depthwise $3\times3$ & $3\cdot3\cdot32 = 288$ & \\
+Pointwise $1\times1$ & $32\cdot64 = 2\,048$ & \\
+\textbf{Séparable (total)} & \textbf{2\,336} & $\approx \mathbf{7{,}3}$ \textbf{millions} \\
+\midrule
+Rapport & $\approx 7{,}9\times$ moins & $\approx 7{,}9\times$ moins \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{MobileNetV1 et ses hyperparamètres.} MobileNetV1 empile 13 blocs de convolution séparable (chacun suivi de BN et ReLU). Il introduit deux hyperparamètres pour ajuster le compromis taille/précision~: le \textbf{multiplicateur de largeur} $\alpha\in]0,1]$, qui réduit proportionnellement le nombre de canaux de chaque couche, et le \textbf{multiplicateur de résolution} $\rho$, qui réduit la résolution de l’image d’entrée. Notre modèle utilise les valeurs par défaut ($\alpha=1$, entrée $224\times224$).
+
+\section{MobileNetV2~: blocs résiduels inversés}
+
+MobileNetV2 améliore la version précédente grâce au \textbf{bloc résiduel inversé avec goulot linéaire} (\emph{inverted residual with linear bottleneck}), représenté sur la figure~\ref{fig:invres}. Il combine trois idées.
+
+\begin{enumerate}
+  \item \textbf{Expansion puis projection.} Un bloc résiduel classique (ResNet) réduit d’abord le nombre de canaux, traite l’information, puis le ré-élargit. MobileNetV2 fait l’inverse~: une convolution $1\times1$ \emph{élargit} les canaux (facteur d’expansion $t=6$ dans la plupart des blocs), la convolution depthwise $3\times3$ traite l’espace dans cet espace large où elle est peu coûteuse, puis une convolution $1\times1$ \emph{projette} vers un nombre réduit de canaux.
+  \item \textbf{Goulot linéaire.} La convolution de projection n’est \emph{pas} suivie d’une ReLU. Les auteurs montrent qu’appliquer une non-linéarité dans un espace étroit détruit de l’information~; la sortie du bloc reste donc linéaire.
+  \item \textbf{Connexion résiduelle.} Quand l’entrée et la sortie ont la même taille (pas de 1, mêmes canaux), l’entrée du bloc est ajoutée à sa sortie. Ce raccourci facilite la circulation du gradient pendant l’entraînement.
+\end{enumerate}
+
+Les activations sont des \textbf{ReLU6}, plafonnées à 6, plus robustes lorsque le calcul est effectué avec une précision numérique réduite, ce qui est précisément le cas après quantification (chapitre~\ref{chap:tflite}).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=4mm]
+  \node[blkw,minimum width=20mm,minimum height=17mm] (a) {\textbf{Entrée}\\[-1pt]{\footnotesize 24 canaux}};
+  \node[blk,minimum width=26mm,minimum height=17mm,right=of a] (b) {\textbf{Conv $1\times1$}\\[-1pt]\footnotesize expansion + ReLU6\\$24\to144$};
+  \node[blk,minimum width=26mm,minimum height=17mm,right=of b] (c) {\textbf{Depthwise $3\times3$}\\[-1pt]\footnotesize + ReLU6\\144 canaux};
+  \node[blko,minimum width=26mm,minimum height=17mm,right=of c] (d) {\textbf{Conv $1\times1$}\\[-1pt]\footnotesize projection linéaire\\$144\to24$};
+  \node[circle,draw=navy,fill=white,inner sep=1pt,right=of d,font=\large] (e) {$+$};
+  \foreach \x/\y in {a/b,b/c,c/d,d/e} \draw[arr] (\x) -- (\y);
+  \draw[arr,okgreen,thick] (a.north) -- ++(0,6mm) -| node[pos=0.25,above,font=\footnotesize,okgreen]{connexion résiduelle} (e.north);
+  \node[right=2mm of e,font=\footnotesize,align=left] {sortie\\24 canaux};
+\end{tikzpicture}
+\caption{Bloc résiduel inversé de MobileNetV2 (exemple avec $t=6$ : 24 canaux élargis à 144, puis ramenés à 24).}\label{fig:invres}
+\end{figure}
+
+\section{Architecture complète}
+
+Le tableau~\ref{tab:mnv2} détaille l’empilement des blocs dans MobileNetV2 (largeur $\alpha=1$, entrée $224\times224\times3$). Il comporte une convolution initiale, 17 blocs résiduels inversés regroupés en sept étapes, une convolution $1\times1$ finale à 1\,280 canaux, puis la tête de classification d’origine (pooling moyen global et couche dense à 1\,000 classes pour ImageNet).
+
+\begin{table}[H]
+\centering
+\caption{Architecture de MobileNetV2 d’après~\cite{sandler2018}. $t$ : facteur d’expansion, $c$ : canaux de sortie, $n$ : nombre de répétitions, $s$ : pas de la première répétition.}\label{tab:mnv2}
+\small
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+\textbf{Opérateur} & $t$ & $c$ & $n$ & $s$ & \textbf{Taille de sortie} \\
+\midrule
+Conv $3\times3$ & --- & 32 & 1 & 2 & $112\times112\times32$ \\
+Bloc résiduel inversé & 1 & 16 & 1 & 1 & $112\times112\times16$ \\
+Bloc résiduel inversé & 6 & 24 & 2 & 2 & $56\times56\times24$ \\
+Bloc résiduel inversé & 6 & 32 & 3 & 2 & $28\times28\times32$ \\
+Bloc résiduel inversé & 6 & 64 & 4 & 2 & $14\times14\times64$ \\
+Bloc résiduel inversé & 6 & 96 & 3 & 1 & $14\times14\times96$ \\
+Bloc résiduel inversé & 6 & 160 & 3 & 2 & $7\times7\times160$ \\
+Bloc résiduel inversé & 6 & 320 & 1 & 1 & $7\times7\times320$ \\
+Conv $1\times1$ & --- & 1\,280 & 1 & 1 & $7\times7\times1280$ \\
+\midrule
+Pooling moyen global & --- & --- & 1 & --- & $1280$ \\
+\textit{Classifieur ImageNet (retiré)} & --- & 1\,000 & 1 & --- & $1000$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Sans sa tête d’origine, la base MobileNetV2 de Keras compte \textbf{2\,257\,984 paramètres}. C’est elle que nous réutilisons.
+
+\section{Comparaison avec d’autres réseaux}
+
+Le tableau~\ref{tab:compare} compare MobileNetV2 à deux réseaux classiques, avec les valeurs publiées dans la documentation de Keras Applications (poids ImageNet).
+
+\begin{table}[H]
+\centering
+\caption{Comparaison des tailles et des précisions sur ImageNet (précision top-1, entrée $224\times224$).}\label{tab:compare}
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Modèle} & \textbf{Taille} & \textbf{Paramètres} & \textbf{Précision top-1} \\
+\midrule
+VGG16 & 528\,Mo & 138,4\,M & 71,3\,\% \\
+ResNet-50 & 98\,Mo & 25,6\,M & 74,9\,\% \\
+\textbf{MobileNetV2} & \textbf{14\,Mo} & \textbf{3,5\,M} & \textbf{71,3\,\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+MobileNetV2 atteint la même précision que VGG16 avec environ 40 fois moins de paramètres. Il reste légèrement moins précis que ResNet-50, mais pèse sept fois moins~: c’est le bon compromis pour un usage sur téléphone.
+
+\section{Le transfert d’apprentissage}\label{sec:transfer}
+
+Entraîner un réseau de plusieurs millions de paramètres à partir de zéro demande des millions d’images. Notre jeu de données n’en compte que quelques milliers. Le \textbf{transfert d’apprentissage} contourne cette limite~: on part d’un réseau déjà entraîné sur une grande base d’images généraliste, ImageNet~\cite{deng2009} (environ 1,28 million d’images d’entraînement réparties en 1\,000 classes), dont les premières couches détectent déjà des bords, des couleurs et des textures utiles pour tout type d’images~\cite{yosinski2014}.
+
+La procédure comporte trois étapes~:
+
+\begin{enumerate}
+  \item \textbf{Charger} la base MobileNetV2 avec ses poids ImageNet, sans sa couche de classification de 1\,000 classes~;
+  \item \textbf{Geler} la base et n’entraîner que la nouvelle tête de classification (pooling moyen global, dropout, couche dense à 11 sorties)~: c’est la \emph{phase 1}, qui n’ajuste que 14\,091 paramètres~;
+  \item \textbf{Dégeler} les dernières couches de la base et poursuivre l’entraînement avec un taux d’apprentissage très faible~: c’est le \emph{fine-tuning}, ou \emph{phase 2}, qui adapte les caractéristiques de haut niveau à notre domaine (fruits).
+\end{enumerate}
+
+Les couches profondes encodent des concepts spécifiques à la tâche d’origine, alors que les premières couches sont génériques~: on dégèle donc uniquement les dernières, en laissant intactes les premières.
+
+\section{Justification du choix pour ce projet}
+
+MobileNetV2 réunit les propriétés recherchées~: un modèle de quelques mégaoctets, un coût de calcul compatible avec un temps de réponse inférieur à la seconde sur un téléphone, des poids pré-entraînés disponibles directement dans Keras, et une conversion simple vers TensorFlow Lite. Son principal inconvénient, une précision ImageNet un peu inférieure à celle de réseaux plus lourds, est peu pénalisant ici~: notre problème comporte 11 classes seulement, avec la couleur comme indice dominant.

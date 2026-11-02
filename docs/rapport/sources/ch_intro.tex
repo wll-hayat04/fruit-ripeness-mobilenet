@@ -1,0 +1,27 @@
+\chapter*{Introduction générale}
+\addcontentsline{toc}{chapter}{Introduction générale}
+\thispagestyle{plain}
+
+Juger si un fruit est «~prêt~» est une décision quotidienne, pour le consommateur comme pour le commerçant. Un fruit cueilli ou acheté trop tôt est dur et sans saveur~; un fruit laissé trop longtemps devient inutilisable et finit à la poubelle. Cette appréciation repose en grande partie sur la couleur et la texture de la peau, deux indices que la vision par ordinateur sait exploiter.
+
+Les réseaux de neurones convolutifs (CNN) se sont imposés comme la méthode de référence pour reconnaître le contenu d’une image. Leur coût de calcul a longtemps réservé leur usage à des serveurs équipés de cartes graphiques. L’arrivée d’architectures conçues pour les appareils mobiles, comme \textbf{MobileNet}, change la donne~: un modèle de quelques mégaoctets peut désormais s’exécuter directement sur un téléphone, sans connexion et sans envoyer de photo à un serveur.
+
+C’est dans ce cadre que s’inscrit notre projet du cours de \emph{Deep Learning}~: concevoir un système qui reconnaît, à partir d’une photographie prise avec un smartphone, \textbf{le fruit et son stade de maturité}. Nous avons retenu trois fruits (bananes, fraises, avocats) et onze classes, de «~non mûr~» à «~pourri~».
+
+\begin{keybox}{Problématique}
+\centering\itshape
+Comment concevoir un classifieur de maturité de fruits à la fois suffisamment précis et suffisamment léger pour s’exécuter hors ligne sur un smartphone, et comment évaluer honnêtement sa fiabilité~?
+\end{keybox}
+
+Le projet couvre l’ensemble de la chaîne~: préparation de données annotées, entraînement par transfert d’apprentissage, évaluation rigoureuse, conversion au format TensorFlow Lite et intégration dans une application Android. Il vise aussi à expliquer les notions théoriques sous-jacentes (neurone, convolution, séparabilité en profondeur, transfert d’apprentissage), car leur compréhension conditionne les choix faits tout au long du travail.
+
+\paragraph{Contributions.} Ce rapport présente~:
+\begin{itemize}
+  \item un jeu de données de 1\,598 images de fruits recadrés, réparties en 11 classes et découpées sans fuite d’information entre entraînement, validation et test~;
+  \item un modèle MobileNetV2 affiné, atteignant 93,1\,\% d’exactitude sur un test indépendant, et une analyse détaillée de ses erreurs ;
+  \item une série d’expériences négatives ou nuancées (callbacks mal configurés, augmentation plus forte, ajout de données d’une autre origine) qui éclairent les choix finaux~;
+  \item une version quantifiée de 2,5\,Mo et une application Android complète, fonctionnant hors ligne, avec seuil de confiance et conseils par stade.
+\end{itemize}
+
+\paragraph{Organisation du rapport.} Le chapitre~\ref{chap:contexte} précise le contexte, les objectifs et la démarche. Les chapitres~\ref{chap:dl} et~\ref{chap:cnn} rappellent les bases du deep learning et des réseaux convolutifs~; le chapitre~\ref{chap:mobilenet} présente MobileNet et le transfert d’apprentissage. Le chapitre~\ref{chap:donnees} décrit les données, le chapitre~\ref{chap:modele} le modèle et son entraînement, et le chapitre~\ref{chap:resultats} les résultats. Les chapitres~\ref{chap:tflite} et~\ref{chap:android} traitent du déploiement et de l’application. Le chapitre~\ref{chap:discussion} discute les limites et les perspectives, avant la conclusion générale.
+\clearpage

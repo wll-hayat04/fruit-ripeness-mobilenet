@@ -1,0 +1,248 @@
+% ============================================================
+%  Rapport de projet - Classification de la maturité des fruits
+%  Cours de Deep Learning - Année universitaire 2026-2027
+%  Compiler avec : pdflatex main.tex (trois passes)
+% ============================================================
+\documentclass[12pt,a4paper]{report}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{mathptmx}            % Times (Nimbus Roman), comme le modèle de référence
+\usepackage{courier}             % police à chasse fixe (code)
+\usepackage[provide=*,main=french]{babel}
+\usepackage{microtype}
+\usepackage[a4paper,left=30mm,right=25mm,top=32mm,bottom=30mm,headheight=26pt,footskip=14mm]{geometry}
+
+\usepackage{xcolor}
+\definecolor{navy}{HTML}{002A55}
+\definecolor{bluemid}{HTML}{00427D}
+\definecolor{gold}{HTML}{B58A1F}
+\definecolor{boxfill}{HTML}{E6F0FA}
+\definecolor{linkblue}{HTML}{0B4F9C}
+\definecolor{softgray}{HTML}{5F6B77}
+\definecolor{okgreen}{HTML}{2E7D4F}
+\definecolor{warnorange}{HTML}{D9772B}
+
+\usepackage{needspace}
+\emergencystretch=3em
+\usepackage{graphicx,amsmath,amssymb,mathtools,booktabs,array,tabularx,multirow,enumitem,float,setspace}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,fit,shapes.geometric,matrix,backgrounds,decorations.pathreplacing}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.16}
+\usepackage[most]{tcolorbox}
+\usepackage{listings}
+\usepackage[font=small,labelfont={bf,color=navy},labelsep=period,justification=justified,singlelinecheck=false]{caption}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{tocloft}
+\usepackage{xurl}
+\usepackage[colorlinks=true,linkcolor=linkblue,citecolor=gold,urlcolor=linkblue,linktoc=section,pdftitle={Classification de la maturité des fruits sur smartphone},pdfauthor={Hayat Waldi, Khaoula Elhonnya}]{hyperref}
+
+% ---------- libellés en français ----------
+\addto\captionsfrench{%
+  \renewcommand{\tablename}{Tableau}%
+  \renewcommand{\figurename}{Figure}%
+  \renewcommand{\contentsname}{Table des matières}%
+  \renewcommand{\listfigurename}{Liste des figures}%
+  \renewcommand{\listtablename}{Liste des tableaux}%
+  \renewcommand{\bibname}{Références}%
+  \renewcommand{\chaptername}{Chapitre}%
+  \renewcommand{\appendixname}{Annexe}%
+}
+\setlength{\parindent}{1.4em}
+\setlength{\parskip}{0pt}
+\setstretch{1.12}
+\setlist{itemsep=2pt,topsep=4pt,parsep=0pt}
+\renewcommand{\arraystretch}{1.22}
+\captionsetup[table]{position=above,skip=6pt}
+\captionsetup[figure]{position=below,skip=6pt}
+
+% ---------- titres ----------
+\titleformat{\chapter}[display]
+  {\normalfont\bfseries\color{navy}}
+  {\raggedleft\color{gold}\fontsize{16}{20}\selectfont\chaptertitlename\ \thechapter}
+  {8pt}
+  {\titlerule[1.1pt]\vspace{10pt}\fontsize{19}{23}\selectfont}
+  [{\vspace{10pt}\titlerule[0.6pt]}]
+\titleformat{name=\chapter,numberless}[block]
+  {\normalfont\bfseries\color{navy}}
+  {}{0pt}
+  {\titlerule[1.1pt]\vspace{10pt}\fontsize{19}{23}\selectfont}
+  [{\vspace{10pt}\titlerule[0.6pt]}]
+\titlespacing*{\chapter}{0pt}{46pt}{34pt}
+\titleformat{\section}{\normalfont\fontsize{14}{18}\bfseries\color{navy}}{\thesection}{0.8em}{}
+\titlespacing*{\section}{0pt}{20pt}{9pt}
+\titleformat{\subsection}{\normalfont\fontsize{12}{15}\bfseries\color{navy}}{\thesubsection}{0.8em}{}
+\titlespacing*{\subsection}{0pt}{14pt}{6pt}
+\titleformat{\subsubsection}{\normalfont\fontsize{12}{15}\bfseries\itshape\color{navy}}{\thesubsubsection}{0.8em}{}
+\titlespacing*{\subsubsection}{0pt}{10pt}{4pt}
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{2}
+
+% ---------- en-têtes et pieds de page ----------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\itshape\color{bluemid}Classification de la maturité des fruits - Rapport de projet}
+\fancyhead[R]{\color{bluemid}\thepage}
+\renewcommand{\headrulewidth}{0.5pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{navy}\leaders\hrule height \headrulewidth\hfill}}
+\fancyfoot[C]{\footnotesize\color{softgray}Département Modélisation et Informatique Scientifique (MIS)}
+\fancypagestyle{plain}{\fancyhf{}\renewcommand{\headrulewidth}{0pt}\fancyfoot[C]{\thepage}}
+
+% ---------- table des matières ----------
+\renewcommand{\cftchapfont}{\bfseries}
+\renewcommand{\cftchappagefont}{\bfseries}
+\renewcommand{\cftchapleader}{\bfseries\cftdotfill{\cftnodots}}
+\renewcommand{\cftsecleader}{\cftdotfill{\cftdotsep}}
+\renewcommand{\cftsubsecleader}{\cftdotfill{\cftdotsep}}
+\setlength{\cftbeforechapskip}{12pt}
+\setlength{\cftbeforesecskip}{3pt}
+\renewcommand{\cftfigfont}{}
+\setlength{\cftbeforefigskip}{6pt}
+\setlength{\cftbeforetabskip}{6pt}
+
+% ---------- boîtes ----------
+\newtcolorbox{keybox}[1]{enhanced,colback=boxfill,colframe=navy,boxrule=0.8pt,arc=3mm,
+  left=5mm,right=5mm,top=2.5mm,bottom=2.5mm,colbacktitle=boxfill,coltitle=black,
+  fonttitle=\bfseries\large,center title,title={#1},titlerule=0pt,before skip=10pt,after skip=10pt}
+\newtcolorbox{absbox}{enhanced,colback=boxfill,colframe=navy,boxrule=0.8pt,arc=0pt,
+  left=3mm,right=3mm,top=2mm,bottom=2mm,before skip=6pt,after skip=8pt}
+\newtcolorbox{defbox}[1]{enhanced,colback=white,colframe=navy!70,boxrule=0.7pt,arc=2mm,
+  left=4mm,right=4mm,top=2mm,bottom=2mm,title={#1},fonttitle=\bfseries\small,
+  colbacktitle=navy!85,coltitle=white,before skip=9pt,after skip=9pt}
+
+% ---------- code ----------
+\lstset{
+  basicstyle=\ttfamily\footnotesize,keywordstyle=\color{navy}\bfseries,
+  commentstyle=\color{softgray}\itshape,stringstyle=\color{gold!75!black},
+  backgroundcolor=\color{gray!7},frame=single,rulecolor=\color{navy!35},
+  breaklines=true,columns=fullflexible,keepspaces=true,showstringspaces=false,
+  numbers=left,numberstyle=\tiny\color{softgray},xleftmargin=2.2em,framexleftmargin=1.8em,
+  aboveskip=10pt,belowskip=6pt,
+  inputencoding=utf8,extendedchars=true,
+  literate={é}{{\'e}}1 {è}{{\`e}}1 {ê}{{\^e}}1 {ë}{{\"e}}1 {à}{{\`a}}1 {â}{{\^a}}1
+           {î}{{\^i}}1 {ï}{{\"i}}1 {ô}{{\^o}}1 {û}{{\^u}}1 {ù}{{\`u}}1 {ç}{{\c c}}1
+           {É}{{\'E}}1 {È}{{\`E}}1 {À}{{\`A}}1 {Ç}{{\c C}}1 {’}{{'}}1 {°}{{$^\circ$}}1
+           {×}{{$\times$}}1 {≥}{{$\geq$}}1 {«}{{\guillemotleft}}1 {»}{{\guillemotright}}1
+}
+\lstdefinelanguage{Kotlin}{
+  morekeywords={package,import,class,private,lateinit,val,var,fun,if,else,when,return,try,catch,
+    companion,object,const,override,thread,in,for,null,true,false,is,as,mapOf,listOf},
+  sensitive=true,morecomment=[l]{//},morecomment=[s]{/*}{*/},morestring=[b]"}
+\lstdefinelanguage{PythonK}{
+  morekeywords={import,from,as,def,return,for,in,if,else,class,with,True,False,None,not,and,or,lambda},
+  sensitive=true,morecomment=[l]{\#},morestring=[b]",morestring=[b]'}
+
+% ---------- raccourcis ----------
+\newcommand{\code}[1]{\texttt{\small #1}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\softmax}{\operatorname{softmax}}
+\newcommand{\relu}{\operatorname{ReLU}}
+
+% ---------- styles TikZ ----------
+\tikzset{
+  blk/.style={draw=navy,fill=boxfill,rounded corners=2pt,align=center,font=\small,inner sep=4pt,minimum height=9mm},
+  blkw/.style={draw=navy!60,fill=white,rounded corners=2pt,align=center,font=\small,inner sep=4pt,minimum height=9mm},
+  blkg/.style={draw=okgreen,fill=okgreen!12,rounded corners=2pt,align=center,font=\small,inner sep=4pt,minimum height=9mm},
+  blko/.style={draw=warnorange,fill=warnorange!14,rounded corners=2pt,align=center,font=\small,inner sep=4pt,minimum height=9mm},
+  arr/.style={-{Latex[length=2mm]},thick,color=navy},
+  cellS/.style={draw=navy!60,minimum size=7mm,inner sep=0pt,font=\small},
+}
+
+\begin{document}
+\selectlanguage{french}
+
+% ============================================================
+%                       PAGE DE GARDE
+% ============================================================
+\begin{titlepage}
+\thispagestyle{empty}
+\begin{tikzpicture}[remember picture,overlay]
+  \fill[navy] (current page.north west) rectangle ([yshift=-37mm]current page.north east);
+  \node[text=white,align=center,anchor=north] at ([yshift=-4.5mm]current page.north)
+    {{\large\bfseries Royaume du Maroc}\\[1.8mm]
+     Université Mohammed V de Rabat\\[1.4mm]
+     École Mohammadia d’Ingénieurs\\[1.4mm]
+     {\small Département Modélisation et Informatique Scientifique (MIS)}};
+  \draw[navy,line width=0.6pt] ([xshift=18mm,yshift=11mm]current page.south west) -- ([xshift=-18mm,yshift=11mm]current page.south east);
+\end{tikzpicture}
+\vspace*{18mm}
+\begin{center}
+  \includegraphics[height=19mm]{logos/emi.png}\hspace{52mm}%
+  \includegraphics[height=19mm]{logos/um5.png}
+
+  \vspace{15mm}
+  {\color{navy}\fontsize{22}{26}\selectfont\bfseries RAPPORT DE PROJET\par}
+  \vspace{2mm}
+  {\normalsize Cycle ingénieur – Modélisation et Informatique Scientifique\par}
+
+  \vspace{7mm}
+  {\normalsize Projet réalisé dans le cadre du cours de\par}
+  \vspace{1mm}
+  {\color{bluemid}\fontsize{18}{22}\selectfont\bfseries Deep Learning\par}
+  \vspace{1mm}
+  {\small Réseaux convolutifs, vision par ordinateur et déploiement sur mobile\par}
+
+  \vspace{9mm}
+  \begin{tcolorbox}[enhanced,colback=boxfill!60,colframe=bluemid,boxrule=0.9pt,arc=3mm,width=0.84\textwidth,
+      left=4mm,right=4mm,top=4mm,bottom=4mm]
+    \centering
+    {\color{navy}\fontsize{19}{23}\selectfont\bfseries Classification de la maturité\\des fruits sur smartphone\par}
+    \vspace{3mm}
+    {\large\itshape Transfert d’apprentissage avec MobileNetV2,\\quantification TensorFlow Lite et application Android\par}
+  \end{tcolorbox}
+\end{center}
+
+\vspace{9mm}
+\noindent\hspace{4mm}%
+\begin{minipage}[t]{0.47\textwidth}
+  {\color{navy}\bfseries Réalisé par :}\\[1.5mm]
+  Hayat WALDI\\
+  Khaoula ELHONNYA\\[5mm]
+  {\color{navy}\bfseries Cours :}\\[1.5mm]
+  Deep Learning
+\end{minipage}\hfill
+\begin{minipage}[t]{0.47\textwidth}
+  {\color{navy}\bfseries Encadré par :}\\[1.5mm]
+  Pr. FIKAL\\[5mm]
+  {\color{navy}\bfseries Technologies :}\\[1.5mm]
+  \raggedright TensorFlow/Keras,\\ TensorFlow Lite, Android
+\end{minipage}
+
+\vfill
+\begin{center}
+  {\color{navy}\large\bfseries Année universitaire 2026–2027}
+\end{center}
+\vspace{4mm}
+\end{titlepage}
+
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+\input{ch_front}
+\tableofcontents
+\clearpage
+\addcontentsline{toc}{chapter}{Liste des figures}
+\listoffigures
+\clearpage
+\addcontentsline{toc}{chapter}{Liste des tableaux}
+\listoftables
+\clearpage
+
+\input{ch_intro}
+\input{ch1}
+\input{ch2}
+\input{ch3}
+\input{ch4}
+\input{ch5}
+\input{ch6}
+\input{ch7}
+\input{ch8}
+\input{ch9}
+\input{ch10}
+\input{ch_concl}
+\input{ch_biblio}
+\input{ch_annexes}
+
+\end{document}
