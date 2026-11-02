@@ -1,0 +1,11 @@
+avocat_mur
+avocat_non_mur
+avocat_partiellement_mur
+avocat_pourri
+banane_mure
+banane_non_mure
+banane_trop_mure
+fraise_mure
+fraise_non_mure
+fraise_partiellement_mure
+fraise_pourrie

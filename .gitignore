@@ -1,0 +1,17 @@
+# Python / Jupyter
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# LaTeX
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
